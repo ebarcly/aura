@@ -15,15 +15,20 @@ AURA analyzes a developer's GitHub profile to generate a rich, data-driven, and 
 
 ### Milestone 0: Project Setup & Scaffolding - ✅ COMPLETE
 
-- **Objective:** Initialize the Next.js project, set up the GitHub repository, create the Supabase project, and establish a confirmed connection between the app and the database.
-- **Status:** Completed. The `feat/supabase-integration` branch has been merged into `main`.
+- **Objective:** Initialize the project, set up Supabase, and confirm a working database connection.
+- **Status:** Completed.
 
-### Milestone 1: Authentication & User Dashboard
+### Milestone 1: Authentication & User Dashboard - ✅ COMPLETE
 
-- **Objective:** Implement "Sign in with GitHub" using Supabase Auth. After login, the user should be redirected to a protected dashboard page that displays their basic GitHub information (avatar, username).
+- **Objective:** Implement "Sign in with GitHub" and create a protected dashboard page.
+- **Status:** Completed. Users can log in/out, and the `/dashboard` route is protected by middleware.
+
+### Milestone 2: The Analyzer Core (Backend)
+
+- **Objective:** Build the API endpoint that fetches a user's repos, allows selection, and runs the first analysis (language breakdown).
 - **Key Features:**
-  - GitHub OAuth provider setup in Supabase.
-  - A login button on the home page.
-  - A callback route to handle the authentication response from GitHub.
-  - A protected `/dashboard` route.
-  - A component to display user info and a logout button.
+  - An API route to fetch a user's repositories from the GitHub API.
+  - A UI on the dashboard to display repositories and allow the user to select them for analysis.
+  - A backend service that clones a selected repository.
+  - Integration of a tool like `cloc` to analyze the code and determine language composition.
+  - Saving the analysis results back to our Supabase database.
