@@ -9,7 +9,7 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login"); // TODO: Add login page
+    redirect("/login");
   }
 
   return (
