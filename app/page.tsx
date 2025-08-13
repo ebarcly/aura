@@ -1,6 +1,14 @@
+import { createClient } from "@/lib/supabase/server";
 import LoginButton from "@/app/components/LoginButton";
+import LogoutButton from "@/app/components/LogoutButton";
 
-export default function Home() {
+export default async function Home() {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-24">
       <div className="text-center">
@@ -8,7 +16,7 @@ export default function Home() {
         <p className="text-xl text-gray-400 mb-8">
           Your AI-powered developer portfolio.
         </p>
-        <LoginButton />
+        {user ? <LogoutButton /> : <LoginButton />}
       </div>
     </main>
   );
