@@ -1,6 +1,6 @@
 # AURA - The Developer Super-Portfolio
 
-AURA analyzes a developer's GitHub profile to generate a rich, data-driven, and shareable report that proves their skills in a way a traditional resume cannot. This project is being built as a key portfolio piece.
+AURA analyzes a developer's GitHub profile to generate a rich, data-driven, and shareable report that proves their skills in a way a traditional resume cannot.
 
 ## Tech Stack
 
