@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+interface Repository {
+  fork: boolean;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -23,8 +27,6 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    const githubUsername = user.user_metadata?.user_name;
 
     // Fetch user's repositories
     const reposResponse = await fetch(
@@ -56,7 +58,7 @@ export async function GET(request: NextRequest) {
     const githubUser = await userResponse.json();
 
     // Filter out forked repos and get only owned repos
-    const ownedRepos = repos.filter((repo: any) => !repo.fork);
+    const ownedRepos = repos.filter((repo: Repository) => !repo.fork);
 
     return NextResponse.json({
       user: githubUser,
