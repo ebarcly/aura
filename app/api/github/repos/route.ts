@@ -5,7 +5,7 @@ interface Repository {
   fork: boolean;
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const supabase = await createClient();
     const {
