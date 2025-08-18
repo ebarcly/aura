@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+interface CodeQuality {
+  hasReadme: boolean;
+  hasLicense: boolean;
+  hasTests: boolean;
+  documentationScore: number;
+}
+
+interface Collaboration {
+  contributors: number;
+  issues: number;
+  pullRequests: number;
+}
+
+interface Commits {
+  byMonth: {
+    commits: number;
+  }[];
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -67,7 +86,8 @@ export async function POST(request: NextRequest) {
           onConflict: "user_id,repository_name",
           ignoreDuplicates: false,
         }
-      );
+      )
+      .select();
 
     if (saveError) {
       throw saveError;
@@ -113,7 +133,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function calculateCodeQualityScore(codeQuality: any): number {
+function calculateCodeQualityScore(codeQuality: CodeQuality): number {
   let score = 0;
 
   if (codeQuality.hasReadme) score += 25;
@@ -124,7 +144,7 @@ function calculateCodeQualityScore(codeQuality: any): number {
   return Math.min(score, 100);
 }
 
-function calculateCollaborationScore(collaboration: any): number {
+function calculateCollaborationScore(collaboration: Collaboration): number {
   let score = 30; // Base score
 
   if (collaboration.contributors > 1) score += 20;
@@ -136,19 +156,19 @@ function calculateCollaborationScore(collaboration: any): number {
   return Math.min(score, 100);
 }
 
-function calculateConsistencyScore(commits: any): number {
+function calculateConsistencyScore(commits: Commits): number {
   const monthlyCommits = commits.byMonth || [];
 
   if (monthlyCommits.length === 0) return 0;
 
   // Calculate consistency based on regular commits
   const totalCommits = monthlyCommits.reduce(
-    (sum: number, month: any) => sum + month.commits,
+    (sum, month) => sum + month.commits,
     0
   );
   const averageCommits = totalCommits / monthlyCommits.length;
   const variance =
-    monthlyCommits.reduce((sum: number, month: any) => {
+    monthlyCommits.reduce((sum, month) => {
       return sum + Math.pow(month.commits - averageCommits, 2);
     }, 0) / monthlyCommits.length;
 
