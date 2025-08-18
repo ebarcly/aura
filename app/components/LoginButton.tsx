@@ -11,7 +11,7 @@ export default function LoginButton() {
     await supabase.auth.signInWithOAuth({
       provider: "github",
       options: {
-        redirectTo: `${location.origin}/auth/callback`,
+        redirectTo: `${location.origin}/api/auth/callback`,
         scopes: "read:user user:email repo",
       },
     });

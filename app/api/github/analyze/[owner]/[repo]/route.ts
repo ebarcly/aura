@@ -1,29 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+interface GitHubContent {
+  name: string;
+  type: string;
+}
+
 interface GitHubCommit {
+  author: {
+    login: string;
+  };
   commit: {
     author: {
       date: string;
     };
   };
-  author: {
-    login: string;
-  } | null;
 }
 
-interface LanguageData {
-  [language: string]: number;
-}
-
-interface Issue {
+interface GitHubIssue {
   pull_request?: object;
+}
+
+interface GitHubContributor {
+  login: string;
+  contributions: number;
+}
+
+interface Language {
+  name: string;
+  bytes: number;
+  percentage: number;
 }
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: { owner: string; repo: string } }
 ) {
+  const { owner, repo } = params;
   try {
     const supabase = await createClient();
     const {
@@ -45,70 +58,68 @@ export async function GET(
       );
     }
 
-    const { owner, repo } = await params;
+    const headers = {
+      Authorization: `token ${githubToken}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "AURA-App",
+    };
 
     // Fetch repository languages
     const languagesResponse = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/languages`,
-      {
-        headers: {
-          Authorization: `token ${githubToken}`,
-          Accept: "application/vnd.github.v3+json",
-          "User-Agent": "AURA-App",
-        },
-      }
+      { headers }
     );
 
-    const languages: LanguageData = await languagesResponse.json();
+    const languages = (await languagesResponse.json()) as Record<
+      string,
+      number
+    >;
 
-    // Fetch repository commits (last 100)
-    const commitsResponse = await fetch(
+    // Fetch repository commits
+    const commits = await fetchAllPages<GitHubCommit>(
       `https://api.github.com/repos/${owner}/${repo}/commits?per_page=100`,
-      {
-        headers: {
-          Authorization: `token ${githubToken}`,
-          Accept: "application/vnd.github.v3+json",
-          "User-Agent": "AURA-App",
-        },
-      }
+      headers
     );
-
-    const commits: GitHubCommit[] = await commitsResponse.json();
 
     // Fetch repository contributors
-    const contributorsResponse = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/contributors`,
-      {
-        headers: {
-          Authorization: `token ${githubToken}`,
-          Accept: "application/vnd.github.v3+json",
-          "User-Agent": "AURA-App",
-        },
-      }
+    const contributors = await fetchAllPages<GitHubContributor>(
+      `https://api.github.com/repos/${owner}/${repo}/contributors?per_page=100`,
+      headers
     );
-
-    const contributors = await contributorsResponse.json();
 
     // Fetch repository issues and PRs
-    const issuesResponse = await fetch(
+    const issues = await fetchAllPages<GitHubIssue>(
       `https://api.github.com/repos/${owner}/${repo}/issues?state=all&per_page=100`,
-      {
-        headers: {
-          Authorization: `token ${githubToken}`,
-          Accept: "application/vnd.github.v3+json",
-          "User-Agent": "AURA-App",
-        },
-      }
+      headers
     );
 
-    const issues: Issue[] = await issuesResponse.json();
+    // Fetch repository root content to check for README and LICENSE
+    const contentResponse = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/contents/`,
+      { headers }
+    );
+
+    const content = await contentResponse.json();
+
+    const hasReadme = Array.isArray(content)
+      ? content.some((file: GitHubContent) =>
+          file.name.toLowerCase().startsWith("readme")
+        )
+      : false;
+    const hasLicense = Array.isArray(content)
+      ? content.some((file: GitHubContent) =>
+          file.name.toLowerCase().startsWith("license")
+        )
+      : false;
+
+    const hasTests = await checkForTests(owner, repo, githubToken);
 
     // Process the data
     const totalBytes = Object.values(languages).reduce(
       (sum: number, bytes: number) => sum + bytes,
       0
     );
-    const languageBreakdown = Object.entries(languages).map(
+    const languageBreakdown: Language[] = Object.entries(languages).map(
       ([name, bytes]: [string, number]) => ({
         name,
         bytes,
@@ -119,12 +130,17 @@ export async function GET(
     // Analyze commit patterns
     const commitsByMonth = analyzeCommitPatterns(commits);
     const userCommits = commits.filter(
-      (commit) => commit.author?.login === user.user_metadata?.user_name
+      (commit: GitHubCommit) =>
+        commit.author?.login === user.user_metadata?.user_name
     );
 
     // Separate issues and pull requests
-    const pullRequests = issues.filter((item) => item.pull_request);
-    const actualIssues = issues.filter((item) => !item.pull_request);
+    const pullRequests = issues.filter(
+      (item: GitHubIssue) => item.pull_request
+    );
+    const actualIssues = issues.filter(
+      (item: GitHubIssue) => !item.pull_request
+    );
 
     const analysis = {
       languages: languageBreakdown,
@@ -141,11 +157,9 @@ export async function GET(
         isCollaborative: contributors.length > 1,
       },
       codeQuality: {
-        hasReadme: true, // We can check this by fetching README
-        hasLicense: true, // We can check this by fetching license
-        hasTests: languageBreakdown.some((lang) =>
-          ["JavaScript", "TypeScript", "Python", "Java"].includes(lang.name)
-        ),
+        hasReadme,
+        hasLicense,
+        hasTests,
         documentationScore: calculateDocumentationScore(languageBreakdown),
       },
     };
@@ -174,7 +188,7 @@ function analyzeCommitPatterns(commits: GitHubCommit[]) {
     monthlyCommits[key] = 0;
   }
 
-  commits.forEach((commit) => {
+  commits.forEach((commit: GitHubCommit) => {
     const date = new Date(commit.commit.author.date);
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
       2,
@@ -192,9 +206,7 @@ function analyzeCommitPatterns(commits: GitHubCommit[]) {
   }));
 }
 
-function calculateDocumentationScore(
-  languages: { name: string; bytes: number; percentage: number }[]
-): number {
+function calculateDocumentationScore(languages: Language[]): number {
   const hasMarkdown = languages.some((lang) => lang.name === "Markdown");
   const hasComments = languages.some((lang) =>
     ["JavaScript", "TypeScript", "Python", "Java", "C++"].includes(lang.name)
@@ -205,4 +217,102 @@ function calculateDocumentationScore(
   if (hasComments) score += 20;
 
   return Math.min(score, 100);
+}
+
+async function checkForTests(
+  owner: string,
+  repo: string,
+  token: string
+): Promise<boolean> {
+  const commonTestDirs = ["test", "tests", "__tests__"];
+  const commonTestFiles = [".test.", ".spec.", "_test.go", "test_", "_spec.rb"];
+
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/trees/main?recursive=1`,
+      {
+        headers: {
+          Authorization: `token ${token}`,
+          Accept: "application/vnd.github.v3+json",
+          "User-Agent": "AURA-App",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.warn("Failed to fetch repository tree. Assuming no tests.");
+      return false;
+    }
+
+    const { tree } = await response.json();
+
+    if (!Array.isArray(tree)) {
+      return false;
+    }
+
+    for (const item of tree) {
+      const path = item.path.toLowerCase();
+
+      // Check for common test directories
+      if (commonTestDirs.some((dir) => path.includes(`${dir}/`))) {
+        return true;
+      }
+
+      // Check for common test file patterns
+      if (commonTestFiles.some((file) => path.includes(file))) {
+        return true;
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.error("Error checking for tests:", error);
+    return false;
+  }
+}
+
+async function fetchAllPages<T>(
+  url: string,
+  headers: HeadersInit
+): Promise<T[]> {
+  let results: T[] = [];
+  let nextUrl: string | null = url;
+
+  while (nextUrl) {
+    const response: Response = await fetch(nextUrl, { headers });
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(
+        `GitHub API request failed: ${response.statusText} - ${errorBody}`
+      );
+    }
+
+    const data = await response.json();
+    if (!Array.isArray(data)) {
+      console.error("Expected array from GitHub API but got:", data);
+      throw new Error("Invalid data format from GitHub API.");
+    }
+    results = results.concat(data);
+
+    const linkHeader = response.headers.get("Link");
+    if (linkHeader) {
+      const nextLink = linkHeader
+        .split(",")
+        .find((s) => s.includes('rel="next"'));
+      if (nextLink) {
+        const match = nextLink.match(/<([^>]+)>/);
+        if (match) {
+          nextUrl = match[1];
+        } else {
+          nextUrl = null;
+        }
+      } else {
+        nextUrl = null;
+      }
+    } else {
+      nextUrl = null;
+    }
+  }
+
+  return results;
 }
