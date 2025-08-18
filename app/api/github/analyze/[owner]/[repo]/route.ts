@@ -1,8 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+interface GitHubCommit {
+  commit: {
+    author: {
+      date: string;
+    };
+  };
+  author: {
+    login: string;
+  } | null;
+}
+
+interface LanguageData {
+  [language: string]: number;
+}
+
+interface Issue {
+  pull_request?: object;
+}
+
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: { owner: string; repo: string } }
 ) {
   try {
@@ -40,7 +59,7 @@ export async function GET(
       }
     );
 
-    const languages = await languagesResponse.json();
+    const languages: LanguageData = await languagesResponse.json();
 
     // Fetch repository commits (last 100)
     const commitsResponse = await fetch(
@@ -54,7 +73,7 @@ export async function GET(
       }
     );
 
-    const commits = await commitsResponse.json();
+    const commits: GitHubCommit[] = await commitsResponse.json();
 
     // Fetch repository contributors
     const contributorsResponse = await fetch(
@@ -82,15 +101,15 @@ export async function GET(
       }
     );
 
-    const issues = await issuesResponse.json();
+    const issues: Issue[] = await issuesResponse.json();
 
     // Process the data
     const totalBytes = Object.values(languages).reduce(
-      (sum: number, bytes: any) => sum + bytes,
+      (sum: number, bytes: number) => sum + bytes,
       0
     );
     const languageBreakdown = Object.entries(languages).map(
-      ([name, bytes]: [string, any]) => ({
+      ([name, bytes]: [string, number]) => ({
         name,
         bytes,
         percentage: Math.round((bytes / totalBytes) * 100),
@@ -100,12 +119,12 @@ export async function GET(
     // Analyze commit patterns
     const commitsByMonth = analyzeCommitPatterns(commits);
     const userCommits = commits.filter(
-      (commit: any) => commit.author?.login === user.user_metadata?.user_name
+      (commit) => commit.author?.login === user.user_metadata?.user_name
     );
 
     // Separate issues and pull requests
-    const pullRequests = issues.filter((item: any) => item.pull_request);
-    const actualIssues = issues.filter((item: any) => !item.pull_request);
+    const pullRequests = issues.filter((item) => item.pull_request);
+    const actualIssues = issues.filter((item) => !item.pull_request);
 
     const analysis = {
       languages: languageBreakdown,
@@ -141,7 +160,7 @@ export async function GET(
   }
 }
 
-function analyzeCommitPatterns(commits: any[]) {
+function analyzeCommitPatterns(commits: GitHubCommit[]) {
   const monthlyCommits: { [key: string]: number } = {};
   const now = new Date();
 
@@ -155,7 +174,7 @@ function analyzeCommitPatterns(commits: any[]) {
     monthlyCommits[key] = 0;
   }
 
-  commits.forEach((commit: any) => {
+  commits.forEach((commit) => {
     const date = new Date(commit.commit.author.date);
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
       2,
@@ -173,7 +192,9 @@ function analyzeCommitPatterns(commits: any[]) {
   }));
 }
 
-function calculateDocumentationScore(languages: any[]): number {
+function calculateDocumentationScore(
+  languages: { name: string; bytes: number; percentage: number }[]
+): number {
   const hasMarkdown = languages.some((lang) => lang.name === "Markdown");
   const hasComments = languages.some((lang) =>
     ["JavaScript", "TypeScript", "Python", "Java", "C++"].includes(lang.name)
