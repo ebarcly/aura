@@ -11,14 +11,13 @@ import {
   TrendingUp,
   Download,
   Share2,
-  ExternalLink,
   RefreshCw,
   CheckCircle,
   AlertCircle,
   Loader2,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
-import LogoutButton from "@/app/components/LogoutButton";
+import Image from "next/image";
 
 interface Repository {
   id: number;
@@ -78,7 +77,7 @@ interface AnalysisData {
   };
 }
 
-export default function GitHubAnalyzer({ user }: { user: any }) {
+export default function GitHubAnalyzer() {
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState("");
@@ -133,29 +132,63 @@ export default function GitHubAnalyzer({ user }: { user: any }) {
 
     setAnalyzing(true);
     setError("");
-    const newAnalysisData: { [key: number]: AnalysisData } = {};
 
     try {
       const selectedReposList = repositories.filter((repo) =>
         selectedRepos.has(repo.id)
       );
 
-      for (const repo of selectedReposList) {
-        const response = await fetch(
-          `/api/github/analyze/${githubUser?.login}/${repo.name}`
-        );
+      const analysisPromises = selectedReposList.map(async (repo) => {
+        try {
+          // Step 1: Analyze the repository
+          const analyzeResponse = await fetch(
+            `/api/github/analyze/${githubUser?.login}/${repo.name}`
+          );
+          if (!analyzeResponse.ok) {
+            const errorData = await analyzeResponse.json().catch(() => ({}));
+            throw new Error(
+              `Failed to analyze ${repo.name}: ${
+                errorData.error || analyzeResponse.statusText
+              }`
+            );
+          }
+          const analysisResult = await analyzeResponse.json();
 
-        if (response.ok) {
-          const analysis = await response.json();
-          newAnalysisData[repo.id] = analysis;
-        } else {
-          console.error(`Failed to analyze ${repo.name}`);
+          // Update state progressively to show results as they come in
+          setAnalysisData((prev) => ({ ...prev, [repo.id]: analysisResult }));
+
+          // Step 2: Save the analysis result
+          const saveResponse = await fetch("/api/github/analysis/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              repositoryData: repo,
+              analysisData: analysisResult,
+              githubUserData: githubUser,
+            }),
+          });
+          if (!saveResponse.ok) {
+            const errorData = await saveResponse.json().catch(() => ({}));
+            throw new Error(
+              `Failed to save analysis for ${repo.name}: ${
+                errorData.error || saveResponse.statusText
+              }`
+            );
+          }
+        } catch (error) {
+          console.error(`Error processing repository ${repo.name}:`, error);
+          // Re-throw the error to be caught by Promise.all
+          throw error;
         }
-      }
+      });
 
-      setAnalysisData(newAnalysisData);
+      await Promise.all(analysisPromises);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Analysis failed");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "An unknown error occurred during analysis."
+      );
     } finally {
       setAnalyzing(false);
     }
@@ -255,9 +288,11 @@ export default function GitHubAnalyzer({ user }: { user: any }) {
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <img
-                src={githubUser?.avatar_url}
-                alt={githubUser?.name || githubUser?.login}
+              <Image
+                src={githubUser?.avatar_url ?? ""}
+                alt={githubUser?.name || githubUser?.login || ""}
+                width={64}
+                height={64}
                 className="w-16 h-16 rounded-full border-4 border-white/30"
               />
               <div>
@@ -281,10 +316,9 @@ export default function GitHubAnalyzer({ user }: { user: any }) {
                 variant="outline"
                 className="border-white/30 text-white hover:bg-white/10"
               >
-                <Github className="w-4 h-4 mr-2" />
+                <Github className="bg-slate-500 w-4 h-4 mr-2 text-white rounded-full p-1" />
                 View Profile
               </Button>
-              <LogoutButton />
             </div>
           </div>
         </div>
@@ -448,7 +482,7 @@ export default function GitHubAnalyzer({ user }: { user: any }) {
                   Top Languages
                 </h2>
                 <div className="space-y-4">
-                  {overallStats.topLanguages.map((lang, index) => (
+                  {overallStats.topLanguages.map((lang) => (
                     <div
                       key={lang.name}
                       className="flex items-center justify-between"
