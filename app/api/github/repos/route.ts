@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-export async function GET(request: NextRequest) {
+interface Repository {
+  fork: boolean;
+}
+
+export async function GET(_request: NextRequest) {
   try {
     const supabase = await createClient();
     const {
@@ -42,7 +46,7 @@ export async function GET(request: NextRequest) {
       throw new Error(`GitHub API error: ${reposResponse.status}`);
     }
 
-    const repos = await reposResponse.json();
+    const repos: Repository[] = await reposResponse.json();
 
     // Fetch user's profile data
     const userResponse = await fetch(`https://api.github.com/user`, {
@@ -56,7 +60,7 @@ export async function GET(request: NextRequest) {
     const githubUser = await userResponse.json();
 
     // Filter out forked repos and get only owned repos
-    const ownedRepos = repos.filter((repo: any) => !repo.fork);
+    const ownedRepos = repos.filter((repo) => !repo.fork);
 
     return NextResponse.json({
       user: githubUser,
