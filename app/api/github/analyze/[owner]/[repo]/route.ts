@@ -26,7 +26,7 @@ export async function GET(
       );
     }
 
-    const { owner, repo } = params;
+    const { owner, repo } = await params;
 
     // Fetch repository languages
     const languagesResponse = await fetch(

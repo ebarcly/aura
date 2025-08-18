@@ -3,7 +3,6 @@ import { updateSession } from "@/lib/supabase/middleware";
 
 export async function middleware(request: NextRequest) {
   // This function will just call our session updater.
-  console.log("Middleware running");
   return await updateSession(request);
 }
 
