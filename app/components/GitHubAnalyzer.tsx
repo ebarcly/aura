@@ -17,7 +17,6 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
-import LogoutButton from "@/app/components/LogoutButton";
 import Image from "next/image";
 
 interface Repository {
@@ -320,7 +319,6 @@ export default function GitHubAnalyzer() {
                 <Github className="bg-slate-500 w-4 h-4 mr-2 text-white rounded-full p-1" />
                 View Profile
               </Button>
-              <LogoutButton />
             </div>
           </div>
         </div>
