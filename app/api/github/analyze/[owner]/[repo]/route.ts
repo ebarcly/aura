@@ -36,6 +36,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { owner: string; repo: string } }
 ) {
+  const { owner, repo } = params;
   try {
     const supabase = await createClient();
     const {
@@ -56,8 +57,6 @@ export async function GET(
         { status: 400 }
       );
     }
-
-    const { owner, repo } = params;
 
     const headers = {
       Authorization: `token ${githubToken}`,
