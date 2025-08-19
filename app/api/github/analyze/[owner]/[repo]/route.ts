@@ -128,11 +128,11 @@ export async function GET(
     );
 
     // Analyze commit patterns
-    const commitsByMonth = analyzeCommitPatterns(commits);
     const userCommits = commits.filter(
       (commit: GitHubCommit) =>
         commit.author?.login === user.user_metadata?.user_name
     );
+    const commitsByMonth = analyzeCommitPatterns(userCommits);
 
     // Separate issues and pull requests
     const pullRequests = issues.filter(
