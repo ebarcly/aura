@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import GitHubAnalyzer from "@/app/components/GitHubAnalyzer";
+import { Suspense } from "react";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -24,7 +25,7 @@ export default async function DashboardPage() {
             GitHub Access Required
           </h2>
           <p className="text-center text-gray-600">
-            We need access to your GitHub account to analyze your repositories.
+            We need access to your GitHub account to analyze your repositories!
           </p>
           <div className="text-center">
             <a
@@ -39,5 +40,16 @@ export default async function DashboardPage() {
     );
   }
 
-  return <GitHubAnalyzer user={user} />;
+  const appUser = {
+    id: user.id,
+    email: user.email ?? "",
+    name: user.user_metadata.name,
+    avatar_url: user.user_metadata.avatar_url,
+  };
+
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <GitHubAnalyzer user={appUser} />
+    </Suspense>
+  );
 }

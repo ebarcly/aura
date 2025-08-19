@@ -1,4 +1,3 @@
-// app/components/GitHubAnalyzer.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -18,67 +17,11 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
-import LogoutButton from "@/app/components/LogoutButton";
+import { User, Repository, AnalysisData, GitHubUser } from "@/lib/types";
+import { useRouter } from "next/navigation";
+import UserProfileHeader from "@/app/components/UserProfileHeader";
 
-interface Repository {
-  id: number;
-  name: string;
-  description: string | null;
-  html_url: string;
-  language: string | null;
-  stargazers_count: number;
-  forks_count: number;
-  size: number;
-  created_at: string;
-  updated_at: string;
-  topics: string[];
-  private: boolean;
-}
-
-interface GitHubUser {
-  login: string;
-  name: string | null;
-  bio: string | null;
-  avatar_url: string;
-  followers: number;
-  following: number;
-  public_repos: number;
-  created_at: string;
-  location: string | null;
-  company: string | null;
-}
-
-interface AnalysisData {
-  languages: Array<{
-    name: string;
-    bytes: number;
-    percentage: number;
-  }>;
-  commits: {
-    total: number;
-    userCommits: number;
-    byMonth: Array<{
-      month: string;
-      year: string;
-      commits: number;
-    }>;
-    averagePerMonth: number;
-  };
-  collaboration: {
-    contributors: number;
-    issues: number;
-    pullRequests: number;
-    isCollaborative: boolean;
-  };
-  codeQuality: {
-    hasReadme: boolean;
-    hasLicense: boolean;
-    hasTests: boolean;
-    documentationScore: number;
-  };
-}
-
-export default function GitHubAnalyzer({ user }: { user: any }) {
+export default function GitHubAnalyzer({ user }: { user: User }) {
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState("");
@@ -88,6 +31,8 @@ export default function GitHubAnalyzer({ user }: { user: any }) {
   const [analysisData, setAnalysisData] = useState<{
     [key: number]: AnalysisData;
   }>({});
+  const [reportToken, setReportToken] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     fetchGitHubData();
@@ -140,18 +85,26 @@ export default function GitHubAnalyzer({ user }: { user: any }) {
         selectedRepos.has(repo.id)
       );
 
-      for (const repo of selectedReposList) {
+      const analysisPromises = selectedReposList.map(async (repo) => {
         const response = await fetch(
           `/api/github/analyze/${githubUser?.login}/${repo.name}`
         );
-
         if (response.ok) {
           const analysis = await response.json();
-          newAnalysisData[repo.id] = analysis;
+          return { repoId: repo.id, analysis };
         } else {
           console.error(`Failed to analyze ${repo.name}`);
+          return null;
         }
-      }
+      });
+
+      const results = await Promise.all(analysisPromises);
+
+      results.forEach((result) => {
+        if (result) {
+          newAnalysisData[result.repoId] = result.analysis;
+        }
+      });
 
       setAnalysisData(newAnalysisData);
     } catch (err) {
@@ -169,6 +122,36 @@ export default function GitHubAnalyzer({ user }: { user: any }) {
       newSelected.add(repoId);
     }
     setSelectedRepos(newSelected);
+  };
+
+  const handleShareReport = async () => {
+    if (!overallStats) return;
+
+    try {
+      const response = await fetch("/api/reports", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          analysisData,
+          overallStats,
+          githubUser,
+        }),
+      });
+
+      if (response.ok) {
+        const { token } = await response.json();
+        setReportToken(token);
+        router.push(`/reports/${token}`);
+      } else {
+        setError("Failed to create a shareable report.");
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "An error occurred while sharing."
+      );
+    }
   };
 
   const getOverallStats = () => {
@@ -251,44 +234,7 @@ export default function GitHubAnalyzer({ user }: { user: any }) {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white py-8">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <img
-                src={githubUser?.avatar_url}
-                alt={githubUser?.name || githubUser?.login}
-                className="w-16 h-16 rounded-full border-4 border-white/30"
-              />
-              <div>
-                <h1 className="text-3xl font-bold">
-                  {githubUser?.name || githubUser?.login}
-                </h1>
-                <p className="text-blue-100">@{githubUser?.login}</p>
-                {githubUser?.bio && (
-                  <p className="text-blue-200 text-sm mt-1">{githubUser.bio}</p>
-                )}
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <Button
-                onClick={() =>
-                  window.open(
-                    `https://github.com/${githubUser?.login}`,
-                    "_blank"
-                  )
-                }
-                variant="outline"
-                className="border-white/30 text-white hover:bg-white/10"
-              >
-                <Github className="w-4 h-4 mr-2" />
-                View Profile
-              </Button>
-              <LogoutButton />
-            </div>
-          </div>
-        </div>
-      </div>
+      <UserProfileHeader githubUser={githubUser} />
 
       <div className="container mx-auto px-4 py-8">
         {/* Quick Stats */}
@@ -474,9 +420,7 @@ export default function GitHubAnalyzer({ user }: { user: any }) {
                 <div className="mt-4 space-y-2">
                   <Button
                     className="w-full bg-white/20 hover:bg-white/30 border-0"
-                    onClick={() => {
-                      /* TODO: Implement share */
-                    }}
+                    onClick={handleShareReport}
                   >
                     <Share2 className="w-4 h-4 mr-2" />
                     Share Report

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Github,
   Star,
@@ -14,6 +15,11 @@ import {
 
 interface ReportPageProps {
   params: { token: string };
+}
+
+interface Language {
+  name: string;
+  bytes: number;
 }
 
 export default async function PublicReportPage({ params }: ReportPageProps) {
@@ -55,7 +61,7 @@ export default async function PublicReportPage({ params }: ReportPageProps) {
   const languageMap: { [key: string]: number } = {};
   analyses.forEach((analysis) => {
     if (analysis.languages && Array.isArray(analysis.languages)) {
-      analysis.languages.forEach((lang: any) => {
+      analysis.languages.forEach((lang: Language) => {
         languageMap[lang.name] = (languageMap[lang.name] || 0) + lang.bytes;
       });
     }
@@ -89,15 +95,21 @@ export default async function PublicReportPage({ params }: ReportPageProps) {
         <div className="container mx-auto px-4">
           <div className="text-center">
             {profile?.github_avatar_url && (
-              <img
+              <Image
                 src={profile.github_avatar_url}
-                alt={profile.github_name || profile.github_username}
-                className="w-20 h-20 rounded-full border-4 border-white/30 mx-auto mb-4"
+                alt={
+                  profile.github_name ||
+                  profile.github_username ||
+                  "User avatar"
+                }
+                width={80}
+                height={80}
+                className="rounded-full border-4 border-white/30 mx-auto mb-4"
               />
             )}
             <h1 className="text-4xl font-bold mb-2">
-              {profile?.github_name || profile?.github_username}'s Developer
-              Portfolio
+              {profile?.github_name || profile?.github_username}&apos;s
+              Developer Portfolio
             </h1>
             <p className="text-xl text-blue-100 mb-4">{report.report_name}</p>
             <div className="flex items-center justify-center gap-6 text-sm text-blue-200">
@@ -178,7 +190,7 @@ export default async function PublicReportPage({ params }: ReportPageProps) {
                 Programming Languages
               </h2>
               <div className="space-y-4">
-                {topLanguages.map((lang, index) => (
+                {topLanguages.map((lang) => (
                   <div
                     key={lang.name}
                     className="flex items-center justify-between"
