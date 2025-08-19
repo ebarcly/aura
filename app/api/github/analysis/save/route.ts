@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      analysisId: savedAnalysis?.[0]?.id,
+      analysisId: savedAnalysis?.id,
       scores: {
         codeQuality: codeQualityScore,
         collaboration: collaborationScore,

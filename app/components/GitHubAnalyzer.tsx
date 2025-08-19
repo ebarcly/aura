@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import {
-  Github,
   Star,
   GitFork,
   Code,
@@ -10,7 +9,6 @@ import {
   TrendingUp,
   Download,
   Share2,
-  ExternalLink,
   RefreshCw,
   CheckCircle,
   AlertCircle,
@@ -21,7 +19,7 @@ import { User, Repository, AnalysisData, GitHubUser } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import UserProfileHeader from "@/app/components/UserProfileHeader";
 
-export default function GitHubAnalyzer({ user }: { user: User }) {
+export default function GitHubAnalyzer({ user: _user }: { user: User }) {
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState("");
@@ -31,7 +29,6 @@ export default function GitHubAnalyzer({ user }: { user: User }) {
   const [analysisData, setAnalysisData] = useState<{
     [key: number]: AnalysisData;
   }>({});
-  const [reportToken, setReportToken] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -125,27 +122,60 @@ export default function GitHubAnalyzer({ user }: { user: User }) {
   };
 
   const handleShareReport = async () => {
-    if (!overallStats) return;
+    if (Object.keys(analysisData).length === 0) {
+      setError("Please analyze at least one repository before sharing.");
+      return;
+    }
 
     try {
-      const response = await fetch("/api/reports", {
+      setError("");
+
+      const selectedReposWithAnalysis = repositories.filter((repo) =>
+        selectedRepos.has(repo.id)
+      );
+
+      // Step 1: Save each repository's analysis
+      const savePromises = selectedReposWithAnalysis.map((repo) => {
+        const analysis = analysisData[repo.id];
+        if (!analysis) return null;
+
+        return fetch("/api/github/analysis/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            repositoryData: repo,
+            analysisData: analysis,
+            githubUserData: githubUser,
+          }),
+        }).then((res) => res.json());
+      });
+
+      const savedAnalyses = await Promise.all(savePromises);
+      const analysisIds = savedAnalyses
+        .filter((result) => result && result.success)
+        .map((result) => result.analysisId);
+
+      if (analysisIds.length === 0) {
+        throw new Error("Failed to save any repository analyses.");
+      }
+
+      // Step 2: Create the report
+      const reportResponse = await fetch("/api/reports", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          analysisData,
-          overallStats,
-          githubUser,
+          repositoryIds: analysisIds,
+          reportName: `Report for ${githubUser?.login}`,
+          isPublic: true,
         }),
       });
 
-      if (response.ok) {
-        const { token } = await response.json();
-        setReportToken(token);
-        router.push(`/reports/${token}`);
+      if (reportResponse.ok) {
+        const { report } = await reportResponse.json();
+        router.push(`/reports/${report.share_token}`);
       } else {
-        setError("Failed to create a shareable report.");
+        const errorData = await reportResponse.json();
+        setError(errorData.error || "Failed to create a shareable report.");
       }
     } catch (err) {
       setError(
