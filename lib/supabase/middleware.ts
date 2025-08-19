@@ -45,9 +45,9 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith("/login") &&
     !request.nextUrl.pathname.startsWith("/auth/callback")
   ) {
-    // no user, potentially respond by redirecting the user to the login page
+    // no user, redirect to the root page
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = "/";
     return NextResponse.redirect(url);
   }
 

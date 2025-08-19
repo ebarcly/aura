@@ -12,12 +12,18 @@ interface Collaboration {
   contributors: number;
   issues: number;
   pullRequests: number;
+  isCollaborative: boolean;
 }
 
 interface Commits {
-  byMonth: {
-    commits: number;
-  }[];
+  total: number;
+  userCommits: number;
+  byMonth: { month: string; year: string; commits: number }[];
+  averagePerMonth: number;
+}
+
+interface MonthlyCommit {
+  commits: number;
 }
 
 export async function POST(request: NextRequest) {
@@ -32,7 +38,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { repositoryData, analysisData } = body;
+    const { repositoryData, analysisData, githubUserData } = body;
 
     // Calculate overall scores
     const codeQualityScore = calculateCodeQualityScore(
@@ -87,32 +93,37 @@ export async function POST(request: NextRequest) {
           ignoreDuplicates: false,
         }
       )
-      .select();
+      .select()
+      .single();
 
     if (saveError) {
+      console.error("Error saving analysis:", saveError);
       throw saveError;
     }
 
     // Update user profile with latest GitHub data
-    const { error: profileError } = await supabase.from("profiles").upsert(
-      {
-        id: user.id,
-        github_username: user.user_metadata?.user_name,
-        github_avatar_url: user.user_metadata?.avatar_url,
-        github_name: user.user_metadata?.full_name,
-        followers_count: repositoryData.owner?.followers || 0,
-        following_count: repositoryData.owner?.following || 0,
-        public_repos_count: repositoryData.owner?.public_repos || 0,
-      },
-      {
-        onConflict: "id",
-        ignoreDuplicates: false,
-      }
-    );
+    if (githubUserData) {
+      const { error: profileError } = await supabase.from("profiles").upsert(
+        {
+          id: user.id,
+          github_username: githubUserData.login,
+          github_avatar_url: githubUserData.avatar_url,
+          github_name: githubUserData.name,
+          github_bio: githubUserData.bio,
+          github_location: githubUserData.location,
+          github_company: githubUserData.company,
+          followers_count: githubUserData.followers,
+          following_count: githubUserData.following,
+          public_repos_count: githubUserData.public_repos,
+        },
+        {
+          onConflict: "id",
+        }
+      );
 
-    if (profileError) {
-      console.error("Profile update error:", profileError);
-      // Don't fail the entire request if profile update fails
+      if (profileError) {
+        console.error("Profile update error:", profileError);
+      }
     }
 
     return NextResponse.json({
@@ -125,9 +136,12 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error saving analysis:", error);
+    console.error("Error in save analysis route:", error);
     return NextResponse.json(
-      { error: "Failed to save analysis" },
+      {
+        error: "Failed to save analysis",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }
@@ -163,12 +177,12 @@ function calculateConsistencyScore(commits: Commits): number {
 
   // Calculate consistency based on regular commits
   const totalCommits = monthlyCommits.reduce(
-    (sum, month) => sum + month.commits,
+    (sum: number, month: MonthlyCommit) => sum + month.commits,
     0
   );
   const averageCommits = totalCommits / monthlyCommits.length;
   const variance =
-    monthlyCommits.reduce((sum, month) => {
+    monthlyCommits.reduce((sum: number, month: MonthlyCommit) => {
       return sum + Math.pow(month.commits - averageCommits, 2);
     }, 0) / monthlyCommits.length;
 

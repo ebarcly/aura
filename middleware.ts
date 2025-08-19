@@ -2,7 +2,7 @@ import { type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
 export async function middleware(request: NextRequest) {
-  // This function will just call our session updater.
+  // This function will just call our session updater
   return await updateSession(request);
 }
 
@@ -15,6 +15,6 @@ export const config = {
      * - favicon.ico (favicon file)
      * - .env (environment variables)
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|env)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
